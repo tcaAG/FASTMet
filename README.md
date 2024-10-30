@@ -1,2 +1,2 @@
 # FASTMet
-Python packages dealing enrichment and flux calculation 
+Python packages dealing with LC-MS/MS based 13C-enrichment and flux calculations 
