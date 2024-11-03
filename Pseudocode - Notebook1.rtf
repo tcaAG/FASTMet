@@ -1,0 +1,97 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2639
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww33400\viewh19380\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 START\
+\
+IMPORT pandas as pd\
+IMPORT combinations function from itertools\
+IMPORT glob\
+\
+# Read the metabolite info CSV file and clean data\
+LOAD MetaboliteInfo_v5.5.csv into m_df\
+REMOVE duplicates from m_df\
+SET 'compoundId' as index for m_df\
+CONVERT column headers in m_df to lowercase\
+\
+# Retrieve Area and Sample info files\
+GET all files starting with "A" into a_files list\
+GET all files starting with "S" into s_files list\
+\
+# DEFINE function 'combi' to compute combinations count\
+FUNCTION combi(a, b):\
+    RETURN number of ways to choose 'b' elements from 'a'\
+\
+# DEFINE function 'natural_abundance' to calculate natural abundance values\
+FUNCTION natural_abundance(df):\
+    SET natural abundance constants for isotopes (13C, 2H, 15N, 17O, 18O)\
+    CALCULATE M+0 isotope's natural abundance (NA_M0) using parent molecule composition\
+\
+    # Calculate lost and daughter fragment compositions\
+    CALCULATE 'lost_C', 'lost_H', 'lost_O', 'lost_N' columns\
+    DEFINE lists for lost fragments and daughter fragments\
+\
+    # Calculate M+1 and M+2 isotopologues' natural abundances (NA_P1D0, NA_P1D1, NA_P2D0, NA_P2D1, NA_P2D2)\
+    APPLY combinations and abundance factors\
+\
+    SET M+3 and higher NA values to 0 (negligible)\
+\
+    COMBINE NA values into a single Series and RETURN it\
+\
+# END FUNCTION\
+\
+# Compute natural abundance corrections for metabolite data\
+COMPUTE NA using the 'natural_abundance' function on m_df after dropping NaNs\
+ADD 'NA' column to m_df\
+\
+# Read and process sample info files\
+INITIALIZE empty list s_dfs\
+FOR each file in s_files:\
+    READ file into df with index 'Original.Sample.Name'\
+    APPEND df to s_dfs\
+\
+COMBINE all dataframes in s_dfs into a single dataframe s_df\
+\
+# Filter sample data excluding standards\
+FILTER s_df to get sample_list without 'std' in 'GroupLevel1'\
+EXTRACT standard rows into df_stds\
+\
+# Read and process area files\
+INITIALIZE empty list a_dfs\
+FOR each file in a_files:\
+    READ Area file into a dataframe and set 'compoundId' as index\
+    APPEND the dataframe to a_dfs\
+\
+COMBINE all dataframes in a_dfs into a single dataframe a_df\
+\
+# Process each area file\
+FOR each filename in a_files:\
+    READ Area file into df and set 'compoundId' as index\
+    FILTER df based on sample_list and store in new_a_df\
+    MERGE new_a_df with m_df columns 'metabolite', 'mass', 'NA'\
+    RESET index of combined_df and set new multi-index\
+\
+    CREATE a copy of combined_df as odf without 'NA' column\
+\
+    # Sum area computation\
+    SUM values in odf grouped by 'metabolite'\
+\
+    # Apply natural abundance correction\
+    FILTER rows for 'M+0' and adjust using 'NA'\
+    FILTER rows for '>=M+1' and adjust using 'sum_df'\
+\
+    CLIP negative values in odf to 0\
+\
+    # Calculate NA corrected area and enrichment\
+    SUM odf grouped by 'metabolite'\
+    COMPUTE result as odf divided by sum_odf and drop levels in index\
+    CONVERT index to lowercase\
+\
+    # Write results to CSV\
+    WRITE result to "Enrichments_from_" + filename + ".csv"\
+\
+END\
+}

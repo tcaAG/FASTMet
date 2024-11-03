@@ -1,0 +1,56 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2639
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 1. Import necessary libraries:\
+   - Import pandas as pd\
+   - Import numpy as np\
+   - Import minimize from scipy.optimize\
+\
+2. Read data into a pandas DataFrame:\
+   - Read CSV file `Output_SteadyState_AllValues.csv` into `ssflux_df`\
+   - Set index columns to `['Biol.Rep', 'GroupLevel1']`\
+\
+3. Define a function `weight_calc(x, df)`:\
+   - Return the standard deviation of the specified column `x` grouped by the second index level of `df`\
+\
+4. Add new columns to `ssflux_df` for each flux variable's standard deviation:\
+   - Use `weight_calc` for each variable and store the result in respective `std_` columns\
+\
+5. Define a `Minimizer` class:\
+   - Constructor `__init__`: Initializes the minimizer object with a DataFrame `df`, list of primary variable names `var_names`, and list of secondary variable names `s_var_names`\
+   - Method `minimizer`: Uses `minimize` to minimize an objective function `obj` with specified initial values `x0`, bounds, and constraints `cons`\
+   - Method `recursive_minimizer`: Recursively applies `minimizer` to refine the solution until a stable minimum is found or returns the solution\
+   - Method `run_minimizer`: Iterates through each row in the DataFrame to perform minimization with random initial values:\
+     - For each row, defines an objective function `obj_func_row`\
+     - Sets up constraints to ensure dependent flux variables are non-negative\
+     - Runs minimization up to `n_iter` times or until a solution is found\
+     - Collects results and stores them in a DataFrame\
+\
+6. Define helper functions:\
+   - `nextVal(start=1)`: A generator to produce an infinite sequence of numbers starting from `start`\
+   - `combined_dataframe_generator(df, p_enr_names, p_flux_names, balance)`: Generates a combined DataFrame with predicted enrichment and flux ratio values\
+   - `flux_sec_variables(x, A)`: Computes secondary flux variables based on input `x` and row `A`\
+   - `enrichment_predict(x, A)`: Predicts enrichment values\
+   - `fluxratio_predict(x, A)`: Predicts flux ratios\
+   - `ss_balance(x, A)`: Computes flux balance differences\
+   - `objective_function(x, A)`: Objective function to minimize, combining balances and differences between predicted and measured values\
+\
+7. Set up lists for variable names and labels:\
+   - Define `var_names`, `s_var_names`, `p_enr_names`, `p_flux_names`, `balance`\
+\
+8. Run the minimization process:\
+   - Instantiate `Minimizer` with `ssflux_df`, `var_names`, `s_var_names`\
+   - Run `minimizer.run_minimizer(n_iter=50)`\
+   - Merge results into a DataFrame `results_df`\
+   - Use `combined_dataframe_generator` to produce the final combined DataFrame `combined_results`\
+\
+9. Output results:\
+   - Save `combined_results` to CSV `Output_SteadyState_FluxesRelativeCS_AllIterations.csv`\
+   - Compute median values grouped by `['Biol.Rep', 'GroupLevel1']` and save as `Output_SteadyState_FluxesRelativeCS.csv`\
+\
+10. Print messages to indicate start and completion of the minimization process\
+}

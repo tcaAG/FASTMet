@@ -1,0 +1,102 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2639
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 BEGIN\
+    IMPORT necessary libraries: pandas as pd, glob\
+\
+    # Load Metabolite Info into a DataFrame\
+    m_df = READ CSV "./MetaboliteInfo_v5.5.csv" WITH 'Metabolite' as index column\
+\
+    # Get lists of enrichment files (prefix "E") and sample info files (prefix "S")\
+    e_files = GET all filenames matching "E*.csv"\
+    s_files = GET all filenames matching "S*.csv"\
+\
+    # Load sample info files into DataFrames and concatenate them\
+    s_dfs = EMPTY LIST\
+    FOR each filename in s_files DO\
+        df = READ CSV file WITH 'Original.Sample.Name' as index\
+        APPEND df to s_dfs\
+    END FOR\
+    s_df = CONCATENATE all DataFrames in s_dfs\
+\
+    # Extract columns of interest\
+    cols = ['Biol.Rep', 'Tracer']\
+    g_cols = FIND all column names in s_df STARTING with "GroupLevel"\
+    nonempty_g_cols = FILTER g_cols WHERE columns are not fully empty\
+    final_cols = CONCATENATE cols AND nonempty_g_cols\
+\
+    # Create a new sample info DataFrame with selected columns\
+    new_s_df = EXTRACT final_cols from s_df AND RENAME index to lowercase\
+\
+    # Load enrichment files and map them to sample info DataFrame\
+    e_dfs = EMPTY LIST\
+    FOR each filename in e_files DO\
+        df = READ CSV file WITH 'compoundid' as index\
+        merged_df = CONCATENATE df and new_s_df ON axis=1 WITH "inner" join AND SET index to final_cols\
+        APPEND merged_df to e_dfs\
+    END FOR\
+    combined_df = REDUCE e_dfs USING INNER MERGE on left and right indices\
+\
+    # FUNCTION: cid_query\
+    DEFINE cid_query(mdf, cdf, metname, tracer, *arg) RETURNS LIST\
+        IF length of arg is 2 THEN\
+            RETURN list of compoundIds matching metname, Parent.Label = arg[0], and Daughter.Label = arg[1]\
+        ELSE IF length of arg is 1 THEN\
+            RETURN list of compoundIds matching metname and Mass = arg[0]\
+        END IF\
+    END FUNCTION\
+\
+    # FUNCTION: sum_generator\
+    DEFINE sum_generator(mdf, cdf, metname, tracer, *arg) RETURNS DataFrame\
+        FILTER cdf by tracer matching level 1 index\
+        cid_list = CALL cid_query with given parameters\
+        matching_cids = LIST of matching columns in df\
+        IF matching_cids is empty THEN\
+            PRINT "No enrichment found" and RETURN None\
+        ELSE\
+            RETURN SUM of matching_cids columns, DROPPING level 1 of index\
+        END IF\
+    END FUNCTION\
+\
+    # FUNCTION: sum_query\
+    DEFINE sum_query(code, mdf, cdf) RETURNS FUNCTION CALL\
+        PARSE code to get tracer, metabolite, and fragment info\
+        IF fragment starts with "M" THEN\
+            CONVERT fragment to format "M+n"\
+            RETURN CALL to sum_generator with converted arguments\
+        ELSE\
+            PARSE P and D values from fragment\
+            RETURN CALL to sum_generator with P and D\
+        END IF\
+    END FUNCTION\
+\
+    # FUNCTION: df_generator\
+    DEFINE df_generator(listofmet, mdf, cdf) RETURNS DataFrame\
+        CONCATENATE results of calling sum_query for each item in listofmet with keys=listofmet\
+        RETURN the resulting DataFrame\
+    END FUNCTION\
+\
+    # Index mappings for Tracers and Metabolites\
+    DEFINE t_ind and m_ind as dictionaries mapping codes to full names\
+\
+    # Generate DataFrame with calculated enrichments\
+    List = DEFINED list of metabolite and tracer codes\
+    DF = CALL df_generator with List, m_df, combined_df\
+\
+    # CALCULATE specific nodes and ratios based on given formulas\
+    DF["a1"] = DF["qqGluM2"] / DF["qqCitM3"]\
+    DF["a3"] = COMPUTE expression based on "qqMalM2", "qqGluM2", and others\
+    DF["fIDHr"] = COMPUTE ratio based on "a4", "qqGluM0", etc.\
+\
+    # CONTINUE calculations for various metabolic nodes such as Citrate, Glutamate, AcetylCoA\
+    COMPUTE average values using groupby on level 1 index\
+    ADJUST specific columns where conditions are met (e.g., values exceeding thresholds)\
+\
+    # RETURN final columns of interest for review\
+    PRINT selected columns like "fIDHr", "qqBicarb", "fPDH", etc.\
+END\
+}
